@@ -1,4 +1,4 @@
-use bpf_ins::Instruction;
+use bpf_ins::{Instruction, Opcode};
 
 struct Optimizer {
     pub num_instructions: usize,
@@ -13,18 +13,25 @@ struct Optimizer {
 //   r2 = *r2  |
 //
 fn optimize_mov_add_load(ins: &[Instruction]) -> Option<Vec<Instruction>> {
+    let load_size = if let Opcode::Memory(memory) = ins[2].get_opcode() {
+        *memory.get_size()
+    } else {
+        return None;
+    };
+
     let check0 = Instruction::movx64(ins[0].get_dst_reg(), ins[0].get_src_reg());
     let check1 = Instruction::add64(ins[1].get_dst_reg(), ins[1].get_imm().try_into().ok()?);
-    let check2 = Instruction::loadx64(ins[2].get_dst_reg(), ins[2].get_src_reg(), 0);
+    let check2 = Instruction::loadx(ins[2].get_dst_reg(), ins[2].get_src_reg(), 0, load_size);
 
     if check0 != ins[0] || check1 != ins[1] || check2 != ins[2] {
         return None;
     }
 
-    Some(vec![Instruction::loadx64(
+    Some(vec![Instruction::loadx(
         ins[0].get_dst_reg(),
         ins[0].get_src_reg(),
         ins[1].get_imm().try_into().ok()?,
+        load_size,
     )])
 }
 
