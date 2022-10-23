@@ -577,8 +577,14 @@ impl<'a> Compiler<'a> {
     ) -> Result<()> {
         match rval {
             RValue::Immediate(imm_str) => {
-                let imm = self.parse_immediate(imm_str)?;
-                self.instructions.push(Instruction::mov64(reg, imm));
+                if let Some(load_type) = load_type {
+                    let imm = self.parse_immediate(imm_str)?;
+                    self.instructions
+                        .push(Instruction::loadtype(reg, imm, load_type));
+                } else {
+                    let imm = self.parse_immediate(imm_str)?;
+                    self.instructions.push(Instruction::mov64(reg, imm));
+                }
             }
             RValue::LValue(lval) => {
                 self.emit_set_register_from_lvalue(reg, lval, load_type)?;
