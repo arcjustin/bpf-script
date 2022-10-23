@@ -12,7 +12,7 @@ description = "A small scripting language and compiler for creating eBPF program
 
 [dependencies]
 anyhow = "1.0.65"
-btf = "0.1.0"
+btf = "0.2.0"
 bpf-ins = "0.6.0"
 peginator = "0.2.0"
 peginator_macro = "0.2.0"
