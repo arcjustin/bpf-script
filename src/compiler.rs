@@ -1,7 +1,7 @@
 use crate::helpers::Helpers;
 use crate::optimize;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use bpf_ins::{Instruction, MemoryOpLoadType, Register};
 use btf::types::{QualifiedType, Type};
 use btf::BtfTypes;
@@ -175,6 +175,7 @@ impl<'a> Compiler<'a> {
     ) -> Result<(i16, QualifiedType)> {
         let (sz, is_signed) = match &cast_type.base_type {
             Type::Integer(int) => (int.size, int.is_signed),
+            Type::Struct(st) => (st.size, false),
             Type::Void => (8, false),
             _ => {
                 bail!(
@@ -238,9 +239,7 @@ impl<'a> Compiler<'a> {
                     .push(Instruction::store64(Register::R10, offset, imm));
                 QualifiedType::int::<i64>()
             }
-            _ => {
-                bail!("[Line {}] Unsupported integer size.", self.expr_num);
-            }
+            (_size, _) => cast_type.clone(), // need to eventually handle initialization
         };
 
         Ok((offset, new_type))
@@ -355,7 +354,63 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn get_assign_offset(
+        &mut self,
+        qtype: &QualifiedType,
+        derefs: &[DeReference],
+    ) -> Result<(i16, QualifiedType)> {
+        let mut offset_type = qtype.clone();
+        let mut offset = 0;
+
+        if let Type::Struct(st) = &qtype.base_type {
+            if qtype.is_pointer() {
+                bail!(
+                    "[Line {}] Cannot deref assign through pointer types.",
+                    self.expr_num
+                );
+            }
+
+            for (i, deref) in derefs.iter().enumerate() {
+                if let DeReference::MemberAccess(member) = deref {
+                    let member = st.members.get(&member.name).context(format!(
+                        "[Line {}] Structure has no member named \"{}\".",
+                        self.expr_num, member.name
+                    ))?;
+
+                    if member.offset % 8 != 0 {
+                        bail!(
+                            "[Line {}] Cannot access bitfields: \"{}\".",
+                            self.expr_num,
+                            member.name
+                        );
+                    }
+                    offset += member.offset / 8;
+
+                    let member = self.resolve_type_by_id(member.type_id)?;
+                    if member.is_pointer() && i != derefs.len() - 1 {
+                        bail!(
+                            "[Line {}] Cannot deref assign through pointer types.",
+                            self.expr_num
+                        );
+                    }
+
+                    offset_type = member;
+                } else {
+                    bail!("[Line {}] Array access on non-array type.", self.expr_num);
+                }
+            }
+        } else if !derefs.is_empty() {
+            bail!(
+                "[Line {}] Can only deref assign to structure fields.",
+                self.expr_num
+            );
+        }
+
+        Ok((offset.try_into()?, offset_type))
+    }
+
     fn emit_assign(&mut self, assign: &Assignment) -> Result<()> {
+        let mut new_variable = true;
         let (cast_type, use_offset) =
             if let Ok(info) = &self.get_variable_by_name(&assign.left.name) {
                 if assign.type_name.is_some() {
@@ -365,7 +420,10 @@ impl<'a> Compiler<'a> {
                         assign.left.name
                     );
                 } else if let VariableLocation::Stack(off) = info.location {
-                    (info.var_type.clone(), Some(off))
+                    let (rel_off, offset_type) =
+                        self.get_assign_offset(&info.var_type, &assign.left.derefs)?;
+                    new_variable = false;
+                    (offset_type, Some(off + rel_off))
                 } else {
                     bail!(
                         "[Line {}] Variable \"{}\" cannot be re-assigned.",
@@ -382,13 +440,15 @@ impl<'a> Compiler<'a> {
 
         let (offset, new_type) = self.emit_push_rvalue(&assign.right, &cast_type, use_offset)?;
 
-        self.variables.insert(
-            assign.left.name.clone(),
-            VariableInfo {
-                var_type: new_type,
-                location: VariableLocation::Stack(offset),
-            },
-        );
+        if new_variable {
+            self.variables.insert(
+                assign.left.name.clone(),
+                VariableInfo {
+                    var_type: new_type,
+                    location: VariableLocation::Stack(offset),
+                },
+            );
+        }
 
         Ok(())
     }
