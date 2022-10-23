@@ -20,3 +20,6 @@ compiler.capture("map", map.get_identifier().into());
 compiler.compile(prog).expect("compilation failed");
 let instructions = compiler.get_instructions();
 ```
+
+## TODO
+- Add control flow.
