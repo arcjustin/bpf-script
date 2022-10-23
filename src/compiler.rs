@@ -1,4 +1,5 @@
 use crate::helpers::Helpers;
+use crate::optimize;
 
 use anyhow::{bail, Result};
 use bpf_ins::{Instruction, MemoryOpLoadType, Register};
@@ -697,7 +698,11 @@ impl<'a> Compiler<'a> {
     pub fn compile(&mut self, script_text: &str) -> Result<()> {
         let ast = ScriptDef::parse(script_text)?;
         self.emit_prologue(&ast)?;
-        self.emit_body(&ast)
+        self.emit_body(&ast)?;
+
+        self.instructions = optimize(&self.instructions);
+
+        Ok(())
     }
 
     pub fn get_instructions(&self) -> &[Instruction] {

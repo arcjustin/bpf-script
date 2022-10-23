@@ -1,8 +1,10 @@
 pub mod compiler;
 pub mod helpers;
+mod optimizer;
 
 pub use compiler::*;
 pub use helpers::*;
+use optimizer::*;
 
 #[cfg(test)]
 mod tests {
