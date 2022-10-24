@@ -101,11 +101,18 @@ mod tests {
         let expected = [
             Instruction::storex64(Register::R10, -8, Register::R1), // *(r10 - 8) = r1
             Instruction::loadx64(Register::R6, Register::R10, -8),  // r6 = *(r10 - 8)
-            Instruction::loadx64(Register::R6, Register::R6, 0),    // r6 = *r6
-            Instruction::storex64(Register::R10, -24, Register::R6), // *(r10 - 24) = r6
+            Instruction::movx64(Register::R1, Register::R10),       // r1 = r10
+            Instruction::add64(Register::R1, -24),                  // r1 -= 24
+            Instruction::mov64(Register::R2, 8),                    // r2 = 8
+            Instruction::movx64(Register::R3, Register::R6),        // r3 = r6
+            Instruction::call(Helpers::ProbeReadKernel as u32),     // call #113
             Instruction::loadx64(Register::R6, Register::R10, -8),  // r6 = *(r10 - 8)
-            Instruction::loadx64(Register::R6, Register::R6, 8),    // r6 = *(r6 + 8)
-            Instruction::storex64(Register::R10, -16, Register::R6), // *(r10 - 16) = r6
+            Instruction::add64(Register::R6, 8),                    // r6 += 8
+            Instruction::movx64(Register::R1, Register::R10),       // r3 = r6
+            Instruction::add64(Register::R1, -16),                  // r1 -= 16
+            Instruction::mov64(Register::R2, 8),                    // r2 = 8
+            Instruction::movx64(Register::R3, Register::R6),        // r3 = r6
+            Instruction::call(Helpers::ProbeReadKernel as u32),     // call #113
             Instruction::mov64(Register::R0, 50),                   // r0 = 50
             Instruction::exit(),                                    // exit
         ];

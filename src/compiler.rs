@@ -263,13 +263,6 @@ impl<'a> Compiler<'a> {
         cast_type: &QualifiedType,
         offset: i16,
     ) {
-        if cast_type.get_size() == 8 {
-            self.instructions.push(Instruction::loadx64(reg, reg, 0));
-            self.instructions
-                .push(Instruction::storex64(Register::R10, offset, reg));
-            return;
-        }
-
         /*
          * probe_read_kernel(stack + offset, cast_type.get_size(), reg)
          */
