@@ -42,17 +42,24 @@ fn optimize_mov_add_load(ins: &[Instruction]) -> Option<Vec<Instruction>> {
 //   r2 = *r2  |
 //
 fn optimize_add_load(ins: &[Instruction]) -> Option<Vec<Instruction>> {
+    let load_size = if let Opcode::Memory(memory) = ins[1].get_opcode() {
+        *memory.get_size()
+    } else {
+        return None;
+    };
+
     let check0 = Instruction::add64(ins[0].get_dst_reg(), ins[0].get_imm().try_into().ok()?);
-    let check1 = Instruction::loadx64(ins[1].get_dst_reg(), ins[1].get_src_reg(), 0);
+    let check1 = Instruction::loadx(ins[1].get_dst_reg(), ins[1].get_src_reg(), 0, load_size);
 
     if check0 != ins[0] || check1 != ins[1] {
         return None;
     }
 
-    Some(vec![Instruction::loadx64(
+    Some(vec![Instruction::loadx(
         ins[0].get_dst_reg(),
         ins[0].get_dst_reg(),
         ins[0].get_imm().try_into().ok()?,
+        load_size,
     )])
 }
 
