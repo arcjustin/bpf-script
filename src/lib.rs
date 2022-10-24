@@ -8,7 +8,7 @@ use optimizer::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::Compiler;
+    use crate::{Compiler, Helpers};
     use bpf_ins::{Instruction, Register};
     use btf::BtfTypes;
 
@@ -108,6 +108,57 @@ mod tests {
             Instruction::storex64(Register::R10, -16, Register::R6), // *(r10 - 16) = r6
             Instruction::mov64(Register::R0, 50),                   // r0 = 50
             Instruction::exit(),                                    // exit
+        ];
+
+        compile_and_compare(prog, &expected);
+    }
+
+    #[test]
+    fn assign_function_call() {
+        let prog = r#"
+            fn()
+                a: __u64 = get_current_uid_gid()
+        "#;
+
+        let expected = [
+            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
+            Instruction::storex64(Register::R10, -8, Register::R0), // *(r10 - 8) = r0
+            Instruction::mov64(Register::R0, 0),                 // r0 = 0
+            Instruction::exit(),                                 // exit
+        ];
+
+        compile_and_compare(prog, &expected);
+    }
+
+    #[test]
+    fn return_function_call() {
+        let prog = r#"
+            fn()
+                a: __u64 = 100
+                return get_current_uid_gid()
+        "#;
+
+        let expected = [
+            Instruction::store64(Register::R10, -8, 100), // *(r10 - 8) = 100
+            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
+            Instruction::exit(),                          // exit
+        ];
+
+        compile_and_compare(prog, &expected);
+    }
+
+    #[test]
+    fn return_nested_function_call() {
+        let prog = r#"
+            fn()
+                return get_current_uid_gid(get_current_uid_gid())
+        "#;
+
+        let expected = [
+            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
+            Instruction::movx64(Register::R1, Register::R0),     // r1 = r0
+            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
+            Instruction::exit(),                                 // exit
         ];
 
         compile_and_compare(prog, &expected);

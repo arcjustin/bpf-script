@@ -11,6 +11,8 @@ pub enum Helpers {
     L4CsumReplace = 11,
     TailCall = 12,
     CloneRedirect = 13,
+    GetCurrentPidTgid = 14,
+    GetCurrentUidGid = 15,
     GetCurrentComm = 16,
     SkbVlanPush = 18,
     SkbVlanPop = 19,
@@ -191,6 +193,10 @@ impl Helpers {
             Helpers::TailCall
         } else if name.eq("clone_redirect") {
             Helpers::CloneRedirect
+        } else if name.eq("get_current_pid_tgid") {
+            Helpers::GetCurrentPidTgid
+        } else if name.eq("get_current_uid_gid") {
+            Helpers::GetCurrentUidGid
         } else if name.eq("get_current_comm") {
             Helpers::GetCurrentComm
         } else if name.eq("skb_vlan_push") {

@@ -23,12 +23,12 @@ TypeDecl = [is_ref:ReferencePrefix] name:Ident;
 Expression = @:Assignment | @:FunctionCall | @:Return;
 
 Assignment = left:LValue [':' type_name:TypeDecl] '=' right:RValue;
-FunctionCall = name:Ident '(' args:RValue {',' args:RValue} ')';
+FunctionCall = name:Ident '(' [args:RValue {',' args:RValue}] ')';
 Return = 'return' [value:RValue];
 
 Condition = left:LValue WhiteSpace op:Comparator WhiteSpace right:RValue;
 
-RValue = @:Immediate | @:LValue;
+RValue = @:FunctionCall | @:Immediate | @:LValue;
 LValue = [prefix:Prefix] name:Ident {derefs:DeReference};
 
 DeReference = @:MemberAccess | @:ArrayIndex;
@@ -53,7 +53,7 @@ Prefix = @:ReferencePrefix | @:DeReferencePrefix;
 
 @string
 @no_skip_ws
-Ident = {'a'..'z' | 'A'..'Z' | '_'} [{'a'..'z' | 'A'..'Z' | '_' | '0'..'9'}+];
+Ident = {'a'..'z' | 'A'..'Z' | '_' | '0'..'9'}+;
 
 @string
 @no_skip_ws
@@ -245,8 +245,13 @@ impl<'a> Compiler<'a> {
         Ok((offset, new_type))
     }
 
-    fn emit_push_register(&mut self, reg: Register) -> Result<i16> {
-        let offset = self.push_stack(8)?;
+    fn emit_push_register(&mut self, reg: Register, offset: Option<i16>) -> Result<i16> {
+        let offset = if let Some(offset) = offset {
+            offset
+        } else {
+            self.push_stack(8)?
+        };
+
         self.instructions
             .push(Instruction::storex64(Register::R10, offset, reg));
         Ok(offset)
@@ -351,6 +356,25 @@ impl<'a> Compiler<'a> {
         match rval {
             RValue::Immediate(imm_str) => self.emit_push_immediate(imm_str, cast_type, use_offset),
             RValue::LValue(lval) => self.emit_push_lvalue(lval, cast_type, use_offset),
+            RValue::FunctionCall(call) => {
+                if let Type::Integer(integer) = &cast_type.base_type {
+                    if integer.size != 8 {
+                        bail!(
+                            "[Line {}] Cannot store function return value in non-64-bit integer.",
+                            self.expr_num
+                        );
+                    }
+
+                    self.emit_call(call)?;
+                    let offset = self.emit_push_register(Register::R0, use_offset)?;
+                    Ok((offset, cast_type.clone()))
+                } else {
+                    bail!(
+                        "[Line {}] Cannot store function return in non-integer type.",
+                        self.expr_num
+                    );
+                }
+            }
         }
     }
 
@@ -649,6 +673,13 @@ impl<'a> Compiler<'a> {
             RValue::LValue(lval) => {
                 self.emit_set_register_from_lvalue(reg, lval, load_type)?;
             }
+            RValue::FunctionCall(call) => {
+                self.emit_call(call)?;
+                if !matches!(reg, Register::R0) {
+                    self.instructions
+                        .push(Instruction::movx64(reg, Register::R0));
+                }
+            }
         }
 
         Ok(())
@@ -720,7 +751,7 @@ impl<'a> Compiler<'a> {
         for (i, arg) in ast.input.args.iter().enumerate() {
             let register = Register::from_num((i + 1) as u8).expect("too many args");
             let arg_type = self.resolve_type_by_decl(&arg.type_name)?;
-            let offset = self.emit_push_register(register)?;
+            let offset = self.emit_push_register(register, None)?;
             self.variables.insert(
                 arg.name.clone(),
                 VariableInfo {
