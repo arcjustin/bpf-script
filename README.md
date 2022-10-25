@@ -18,3 +18,4 @@ For usage examples, see code located in [examples/](examples/) :
 
 ## TODO
 - Add control flow.
+- Remove anyhow / add proper errors.
