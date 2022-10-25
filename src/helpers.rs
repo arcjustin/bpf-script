@@ -120,6 +120,7 @@ pub enum Helpers {
 }
 
 impl Helpers {
+    /// Returns the argument types for a given helper function.
     pub fn get_arg_types(&self) -> &[MemoryOpLoadType] {
         match self {
             Helpers::MapLookupElem => &[
@@ -174,6 +175,18 @@ impl Helpers {
         }
     }
 
+    /// Returns a Helper from the string representation of a helper function.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The C name of the helper without the `bpf_` prefix.
+    ///
+    /// # Examples
+    /// ```
+    /// use bpf_script::Helpers;
+    ///
+    /// matches!(Helpers::from_string("map_update_elem"), Some(Helpers::MapUpdateElem));
+    /// ```
     pub fn from_string(name: &str) -> Option<Self> {
         Some(if name.eq("map_update_elem") {
             Helpers::MapUpdateElem

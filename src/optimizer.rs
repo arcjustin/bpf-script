@@ -5,13 +5,12 @@ struct Optimizer {
     pub function: fn(&[Instruction]) -> Option<Vec<Instruction>>,
 }
 
-//
-// Makes the following optimization:
-//
-//   r2 = r1   | r2 = *(r1 + N)
-//   r2 += N   |
-//   r2 = *r2  |
-//
+/// Makes the following optimization:
+///
+///   r2 = r1   | r2 = *(r1 + N)
+///   r2 += N   |
+///   r2 = *r2  |
+///
 fn optimize_mov_add_load(ins: &[Instruction]) -> Option<Vec<Instruction>> {
     let load_size = if let Opcode::Memory(memory) = ins[2].get_opcode() {
         *memory.get_size()
@@ -35,12 +34,12 @@ fn optimize_mov_add_load(ins: &[Instruction]) -> Option<Vec<Instruction>> {
     )])
 }
 
-//
-// Makes the following optimization:
-//
-//   r2 += N   | r2 = *(r2 + N)
-//   r2 = *r2  |
-//
+///
+/// Makes the following optimization:
+///
+///   r2 += N   | r2 = *(r2 + N)
+///   r2 = *r2  |
+///
 fn optimize_add_load(ins: &[Instruction]) -> Option<Vec<Instruction>> {
     let load_size = if let Opcode::Memory(memory) = ins[1].get_opcode() {
         *memory.get_size()
@@ -63,6 +62,7 @@ fn optimize_add_load(ins: &[Instruction]) -> Option<Vec<Instruction>> {
     )])
 }
 
+/// List of optimizers used by the `optimize` function.
 const OPTIMIZERS: [Optimizer; 2] = [
     Optimizer {
         num_instructions: 3,
@@ -74,6 +74,11 @@ const OPTIMIZERS: [Optimizer; 2] = [
     },
 ];
 
+/// Applies various optimizations to the given list of instructions.
+///
+/// # Arguments
+///
+/// * `instructions` - The program, as a list of instructions, to optimize.
 pub fn optimize(instructions: &[Instruction]) -> Vec<Instruction> {
     let mut num_eliminated = 0;
     let mut optimized = vec![];

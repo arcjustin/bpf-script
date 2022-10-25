@@ -86,6 +86,20 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
+    /// Create a new compiler instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `types` - The BTF type library to use when resolving types.
+    ///
+    /// # Example
+    /// ```
+    /// use bpf_script::Compiler;
+    /// use btf::BtfTypes;
+    ///
+    /// let mut btf = BtfTypes::default();
+    /// let mut compiler = Compiler::create(&btf);
+    /// ```
     pub fn create(types: &'a BtfTypes) -> Self {
         Self {
             types,
@@ -96,6 +110,31 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    /// Used to capture variables from the outer scope into the BPF
+    /// program being compiled. This is mostly used to capture map
+    /// identifers to pass to BPF helpers and for other integer values
+    /// that need to be captured. In the future, this will be extended
+    /// to capture arbitrary types making sharing between Rust and BPF
+    /// more seamless.
+    ///
+    /// # Arguments
+    ///
+    /// `name` - The name of the variable when referenced from the script.
+    /// `value` - The value of the variable.
+    ///
+    /// # Example
+    /// ```
+    /// use bpf_script::Compiler;
+    /// use btf::BtfTypes;
+    ///
+    /// let mut btf = BtfTypes::default();
+    /// let mut compiler = Compiler::create(&btf);
+    /// compiler.capture("outer", 0xdeadbeef);
+    /// compiler.compile(r#"
+    ///     fn()
+    ///         return outer
+    /// "#).expect("Failed to compile.");
+    /// ```
     pub fn capture(&mut self, name: &str, value: i64) {
         let info = VariableInfo {
             var_type: QualifiedType::int::<i64>(),
@@ -104,6 +143,8 @@ impl<'a> Compiler<'a> {
         self.variables.insert(name.to_string(), info);
     }
 
+    /// Helper function for resolving a type by id and printing an error
+    /// with line information, if it's not found.
     fn resolve_type_by_id(&mut self, id: u32) -> Result<QualifiedType> {
         if let Some(t) = self.types.resolve_type_by_id(id) {
             return Ok(t);
@@ -116,6 +157,8 @@ impl<'a> Compiler<'a> {
         );
     }
 
+    /// Helper function for resolving a type by `TypeDecl` and printing an error
+    /// with line information, if it's not found.
     fn resolve_type_by_decl(&mut self, decl: &TypeDecl) -> Result<QualifiedType> {
         if let Some(mut t) = self.types.resolve_type_by_name(&decl.name) {
             if matches!(decl.is_ref, Some(ReferencePrefix)) {
@@ -131,6 +174,8 @@ impl<'a> Compiler<'a> {
         );
     }
 
+    /// Helper function for finding a scoped variable by name and printing an error
+    /// with line information, if it's not found.
     fn get_variable_by_name(&mut self, name: &str) -> Result<VariableInfo> {
         if let Some(info) = self.variables.get(name) {
             return Ok(info.clone());
@@ -143,6 +188,8 @@ impl<'a> Compiler<'a> {
         );
     }
 
+    /// Helper function for parsing an immediate value and printin an error with line
+    /// information, if it's not found.
     fn parse_immediate<T: FromStr>(&mut self, s: &str) -> Result<T> {
         if let Ok(imm) = s.parse::<T>() {
             return Ok(imm);
@@ -151,10 +198,14 @@ impl<'a> Compiler<'a> {
         bail!("[Line {}] Bad immediate value \"{}\".", self.expr_num, s);
     }
 
+    /// Get the current stack offset.
     fn get_stack(&self) -> i16 {
         -(self.stack as i16)
     }
 
+    /// Push the stack value by a given size and return the new offset. Verifies the
+    /// new location doesn't overflow the stack and returns and error with line information,
+    /// if it does.
     fn push_stack(&mut self, sz: u32) -> Result<i16> {
         if self.stack + sz > 512 {
             bail!(
@@ -785,6 +836,25 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    /// Compile a given script.
+    ///
+    /// # Arguments
+    ///
+    /// * `script_text` - The script to compile, as a string.
+    ///
+    /// # Example
+    /// ```
+    /// use bpf_script::Compiler;
+    /// use btf::BtfTypes;
+    ///
+    /// let mut btf = BtfTypes::default();
+    /// btf.add_integer("u32", 4, false).expect("Failed to add u32 type.");
+    /// let mut compiler = Compiler::create(&btf);
+    /// compiler.compile(r#"
+    ///     fn(a: u32)
+    ///         return a
+    /// "#).expect("Failed to compile.");
+    /// ```
     pub fn compile(&mut self, script_text: &str) -> Result<()> {
         let ast = ScriptDef::parse(script_text)?;
         self.emit_prologue(&ast)?;
@@ -795,10 +865,48 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    /// Returns the internally held instructions after `compile` has been called.
+    ///
+    /// # Example
+    /// ```
+    /// use bpf_script::Compiler;
+    /// use btf::BtfTypes;
+    ///
+    /// let mut btf = BtfTypes::default();
+    /// btf.add_integer("u32", 4, false).expect("Failed to add u32 type.");
+    /// let mut compiler = Compiler::create(&btf);
+    /// compiler.compile(r#"
+    ///     fn(a: u32)
+    ///         return a
+    /// "#).expect("Failed to compile.");
+    /// for ins in compiler.get_instructions() {
+    ///     println!("{}", ins);
+    /// }
+    /// ```
     pub fn get_instructions(&self) -> &[Instruction] {
         &self.instructions
     }
 
+    /// Returns the bytecode of a program after `compile` has been called. These
+    /// are the raw instructions that make up a BPF program that can be passed
+    /// directly to the kernel.
+    ///
+    /// # Example
+    /// ```
+    /// use bpf_script::Compiler;
+    /// use btf::BtfTypes;
+    ///
+    /// let mut btf = BtfTypes::default();
+    /// btf.add_integer("u32", 4, false).expect("Failed to add u32 type.");
+    /// let mut compiler = Compiler::create(&btf);
+    /// compiler.compile(r#"
+    ///     fn(a: u32)
+    ///         return a
+    /// "#).expect("Failed to compile.");
+    /// for ins in compiler.get_bytecode() {
+    ///     println!("{}", ins);
+    /// }
+    /// ```
     pub fn get_bytecode(&self) -> Vec<u64> {
         let mut bytecode = vec![];
         for instruction in &self.instructions {
