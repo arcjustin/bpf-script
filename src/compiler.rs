@@ -1,5 +1,5 @@
 use crate::helpers::Helpers;
-use crate::optimize;
+use crate::optimizer::optimize;
 
 use anyhow::{bail, Context, Result};
 use bpf_ins::{Instruction, MemoryOpLoadType, Register};
