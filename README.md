@@ -8,10 +8,10 @@ The motive behind this crate and sister crates: `btf`, `btf-derive`, `bpf-ins`, 
 ## Example Usage
 
 ```rust
+use bpf_api::collections::Queue;
+use bpf_api::probes::Probe;
+use bpf_api::prog::{Program, ProgramAttr, ProgramType};
 use bpf_script::Compiler;
-use bpf_sys::collections::Queue;
-use bpf_sys::probes::Probe;
-use bpf_sys::prog::{Program, ProgramAttr, ProgramType};
 use btf::BtfTypes;
 use btf_derive::AddToBtf;
 use btf::traits::AddToBtf;
