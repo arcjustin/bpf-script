@@ -3,7 +3,7 @@
 ## Description
 A small scripting language and compiler for creating eBPF programs at runtime.
 
-The motive behind this crate and sister crates: `btf`, `btf-derive`, `bpf-ins`, and `bpf-sys`, aside from learning more about eBPF, was to be able to have a fully Rust eBPF solution. That is, the ability to easily write, compile, and attach BPF programs and use maps without any dependencies on bcc, libbpf or any other non-Rust BPF dependencies.
+The motive behind this crate and sister crates: `btf`, `btf-derive`, `bpf-ins`, and `bpf-api`, aside from learning more about eBPF, was to be able to have a fully Rust eBPF solution. That is, the ability to easily write, compile, and attach BPF programs and use maps without any dependencies on bcc, libbpf or any other non-Rust BPF dependencies.
 
 ## Example Usage
 
