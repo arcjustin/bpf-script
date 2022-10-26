@@ -218,6 +218,49 @@ impl<'a> Compiler<'a> {
         Ok(self.get_stack())
     }
 
+    fn emit_init_stack(&mut self, mut offset: i16, value: i8, mut size: u32) {
+        let value = value as i64;
+        let v64 = value
+            | value << 8
+            | value << 16
+            | value << 24
+            | value << 32
+            | value << 40
+            | value << 48
+            | value << 56;
+        let mut remaining = size;
+        for _ in 0..size / 8 {
+            self.instructions
+                .push(Instruction::store64(Register::R10, offset, v64));
+            remaining -= 8;
+            offset += 8;
+        }
+        size = remaining;
+
+        for _ in 0..size / 4 {
+            self.instructions
+                .push(Instruction::store32(Register::R10, offset, v64 as i32));
+            remaining -= 4;
+            offset += 4;
+        }
+        size = remaining;
+
+        for _ in 0..size / 2 {
+            self.instructions
+                .push(Instruction::store16(Register::R10, offset, v64 as i16));
+            remaining -= 2;
+            offset += 2;
+        }
+        size = remaining;
+
+        for _ in 0..size {
+            self.instructions
+                .push(Instruction::store8(Register::R10, offset, v64 as i8));
+            remaining -= 1;
+            offset += 1;
+        }
+    }
+
     fn emit_push_immediate(
         &mut self,
         imm_str: &str,
@@ -290,7 +333,11 @@ impl<'a> Compiler<'a> {
                     .push(Instruction::store64(Register::R10, offset, imm));
                 QualifiedType::int::<i64>()
             }
-            (_size, _) => cast_type.clone(), // need to eventually handle initialization
+            (size, _) => {
+                let imm = self.parse_immediate::<i8>(imm_str)?;
+                self.emit_init_stack(offset, imm, size);
+                cast_type.clone()
+            }
         };
 
         Ok((offset, new_type))

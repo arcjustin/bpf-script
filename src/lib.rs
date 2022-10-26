@@ -78,10 +78,12 @@ mod tests {
         "#;
 
         let expected = [
+            Instruction::store64(Register::R10, -16, 0), // *(r10 - 16) = 0
+            Instruction::store64(Register::R10, -8, 0),  // *(r10 - 8) = 0
             Instruction::store64(Register::R10, -16, 100), // *(r10 - 16) = 100
-            Instruction::store64(Register::R10, -8, 200),  // *(r10 - 8) = 200
-            Instruction::mov64(Register::R0, 0),           // r0 = 0
-            Instruction::exit(),                           // exit
+            Instruction::store64(Register::R10, -8, 200), // *(r10 - 8) = 200
+            Instruction::mov64(Register::R0, 0),         // r0 = 0
+            Instruction::exit(),                         // exit
         ];
 
         compile_and_compare(prog, &expected);
@@ -99,6 +101,8 @@ mod tests {
 
         let expected = [
             Instruction::storex64(Register::R10, -8, Register::R1), // *(r10 - 8) = r1
+            Instruction::store64(Register::R10, -24, 0),            // *(r10 - 24) = 0
+            Instruction::store64(Register::R10, -16, 0),            // *(r10 - 16) = 0
             Instruction::loadx64(Register::R6, Register::R10, -8),  // r6 = *(r10 - 8)
             Instruction::movx64(Register::R1, Register::R10),       // r1 = r10
             Instruction::add64(Register::R1, -24),                  // r1 -= 24
