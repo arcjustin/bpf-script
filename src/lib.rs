@@ -1,5 +1,5 @@
-pub mod compiler;
-pub mod helpers;
+mod compiler;
+mod helpers;
 mod optimizer;
 
 pub use compiler::Compiler;
