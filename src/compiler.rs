@@ -469,59 +469,86 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn get_member_access(
+        &mut self,
+        qtype: &QualifiedType,
+        name: &str,
+    ) -> Result<(u32, QualifiedType)> {
+        if let Type::Struct(st) = &qtype.base_type {
+            let member = st.members.get(name).context(format!(
+                "[Line {}] Member \"{}\" doesn't exist.",
+                self.expr_num, name
+            ))?;
+
+            if member.offset % 8 != 0 {
+                bail!(
+                    "[Line {}] Bitfield accesses aren't supported.",
+                    self.expr_num
+                );
+            }
+
+            let member_type = self.resolve_type_by_id(member.type_id)?;
+
+            Ok((member.offset / 8, member_type))
+        } else {
+            bail!(
+                "[Line {}] Tried to get member on non-struct type.",
+                self.expr_num
+            )
+        }
+    }
+
+    fn get_array_index(
+        &mut self,
+        qtype: &QualifiedType,
+        index: &str,
+    ) -> Result<(u32, QualifiedType)> {
+        let index = self.parse_immediate::<u32>(index)?;
+        if let Type::Array(ar) = &qtype.base_type {
+            if index > ar.num_elements {
+                bail!(
+                    "[Line {}] Tried to access array index {} when array size is {}.",
+                    self.expr_num,
+                    index,
+                    ar.num_elements
+                );
+            }
+            let element_type = self.resolve_type_by_id(ar.element_type)?;
+            let offset = element_type.get_size() * index;
+            Ok((offset, element_type))
+        } else {
+            bail!(
+                "[Line {}] Tried to get member on non-struct type.",
+                self.expr_num
+            )
+        }
+    }
+
     fn get_assign_offset(
         &mut self,
         qtype: &QualifiedType,
         derefs: &[DeReference],
     ) -> Result<(i16, QualifiedType)> {
-        let mut offset_type = qtype.clone();
         let mut offset = 0;
-
-        if let Type::Struct(st) = &qtype.base_type {
-            if qtype.is_pointer() {
+        let mut cur_type = qtype.clone();
+        for deref in derefs.iter() {
+            if cur_type.is_pointer() {
                 bail!(
-                    "[Line {}] Cannot deref assign through pointer types.",
+                    "[Line {}] Indirect assignments aren't supported.",
                     self.expr_num
                 );
             }
 
-            for (i, deref) in derefs.iter().enumerate() {
-                if let DeReference::MemberAccess(member) = deref {
-                    let member = st.members.get(&member.name).context(format!(
-                        "[Line {}] Structure has no member named \"{}\".",
-                        self.expr_num, member.name
-                    ))?;
+            let (off, ty) = match deref {
+                DeReference::MemberAccess(ma) => self.get_member_access(&cur_type, &ma.name)?,
+                DeReference::ArrayIndex(ai) => self.get_array_index(&cur_type, &ai.element)?,
+            };
 
-                    if member.offset % 8 != 0 {
-                        bail!(
-                            "[Line {}] Cannot access bitfields: \"{}\".",
-                            self.expr_num,
-                            member.name
-                        );
-                    }
-                    offset += member.offset / 8;
-
-                    let member = self.resolve_type_by_id(member.type_id)?;
-                    if member.is_pointer() && i != derefs.len() - 1 {
-                        bail!(
-                            "[Line {}] Cannot deref assign through pointer types.",
-                            self.expr_num
-                        );
-                    }
-
-                    offset_type = member;
-                } else {
-                    bail!("[Line {}] Array access on non-array type.", self.expr_num);
-                }
-            }
-        } else if !derefs.is_empty() {
-            bail!(
-                "[Line {}] Can only deref assign to structure fields.",
-                self.expr_num
-            );
+            offset += off;
+            cur_type = ty;
         }
 
-        Ok((offset.try_into()?, offset_type))
+        Ok((offset.try_into()?, cur_type))
     }
 
     fn emit_assign(&mut self, assign: &Assignment) -> Result<()> {
@@ -574,39 +601,12 @@ impl<'a> Compiler<'a> {
         qtype: &QualifiedType,
         member_access: &MemberAccess,
     ) -> Result<QualifiedType> {
-        let st = match &qtype.base_type {
-            Type::Struct(s) => s,
-            _ => {
-                bail!(
-                    "[Line {}] Cannot member-dereference a variable that isn't a structure.",
-                    self.expr_num,
-                );
-            }
-        };
-
-        let member = if let Some(m) = st.members.get(&member_access.name) {
-            m
-        } else {
-            bail!(
-                "[Line {}] Structure doesn't contain \"{}\" as a field.",
-                self.expr_num,
-                member_access.name,
-            );
-        };
-
-        if member.offset % 8 != 0 {
-            bail!(
-                "[Line {}] Can't access bit-fields of a structure.",
-                self.expr_num,
-            );
-        }
-
-        let offset = (member.offset / 8) as i32;
+        let (offset, member_type) = self.get_member_access(qtype, &member_access.name)?;
         if offset > 0 {
-            self.instructions.push(Instruction::add64(reg, offset));
+            self.instructions
+                .push(Instruction::add64(reg, offset as i32));
         }
-
-        self.resolve_type_by_id(member.type_id)
+        Ok(member_type)
     }
 
     fn emit_deref_array_index(
@@ -615,20 +615,11 @@ impl<'a> Compiler<'a> {
         qtype: &QualifiedType,
         array_index: &ArrayIndex,
     ) -> Result<QualifiedType> {
-        let ar = match &qtype.base_type {
-            Type::Array(a) => a,
-            _ => {
-                bail!(
-                    "[Line {}] Cannot access an element of a type that isn't an array.",
-                    self.expr_num
-                );
-            }
-        };
-
-        let element_type = self.resolve_type_by_id(ar.element_type)?;
-        let element_index = self.parse_immediate::<i32>(&array_index.element)?;
-        let offset = element_index * element_type.get_size() as i32;
-        self.instructions.push(Instruction::add64(reg, offset));
+        let (offset, element_type) = self.get_array_index(qtype, &array_index.element)?;
+        if offset > 0 {
+            self.instructions
+                .push(Instruction::add64(reg, offset as i32));
+        }
         Ok(element_type)
     }
 
