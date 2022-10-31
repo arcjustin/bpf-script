@@ -375,7 +375,7 @@ impl<'a> Compiler<'a> {
         self.instructions
             .push(Instruction::movx64(Register::R3, reg));
         self.instructions
-            .push(Instruction::call(Helpers::ProbeReadKernel as u32));
+            .push(Instruction::call(Helpers::ProbeRead as u32));
     }
 
     fn emit_push_lvalue(

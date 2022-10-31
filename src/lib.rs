@@ -108,14 +108,14 @@ mod tests {
             Instruction::add64(Register::R1, -24),                  // r1 -= 24
             Instruction::mov64(Register::R2, 8),                    // r2 = 8
             Instruction::movx64(Register::R3, Register::R6),        // r3 = r6
-            Instruction::call(Helpers::ProbeReadKernel as u32),     // call #113
+            Instruction::call(Helpers::ProbeRead as u32),           // call #3
             Instruction::loadx64(Register::R6, Register::R10, -8),  // r6 = *(r10 - 8)
             Instruction::add64(Register::R6, 8),                    // r6 += 8
             Instruction::movx64(Register::R1, Register::R10),       // r3 = r6
             Instruction::add64(Register::R1, -16),                  // r1 -= 16
             Instruction::mov64(Register::R2, 8),                    // r2 = 8
             Instruction::movx64(Register::R3, Register::R6),        // r3 = r6
-            Instruction::call(Helpers::ProbeReadKernel as u32),     // call #113
+            Instruction::call(Helpers::ProbeRead as u32),           // call #3
             Instruction::mov64(Register::R0, 50),                   // r0 = 50
             Instruction::exit(),                                    // exit
         ];
