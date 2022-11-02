@@ -4,9 +4,22 @@
 [![mio](https://docs.rs/bpf-script/badge.svg)](https://docs.rs/bpf-script/)
 [![Lines of Code](https://tokei.rs/b1/github/arcjustin/bpf-script?category=code)](https://tokei.rs/b1/github/arcjustin/bpf-script?category=code)
 
-A small scripting language and compiler for creating eBPF programs at runtime.
+A small scripting language and compiler for creating eBPF programs at runtime without bcc or llvm.
 
-The motive behind this crate and sister crates: `btf`, `btf-derive`, `bpf-ins`, and `bpf-api`, aside from learning more about eBPF, was to be able to have a fully Rust eBPF solution. That is, the ability to easily write, compile, and attach BPF programs and use maps without any dependencies on bcc, libbpf or any other non-Rust BPF dependencies.
+The intent behind building this crate was to primarily learn more about BPF internals and, secondly, to provide a dependency-free way of writing BPF programs, using a higher-level language, that could be compiled at run-time without the need to shell out to a compiler and load/patch BPF from an ELF file.
+
+The syntax for the language resembles Rust with a lot of features stripped out. For example, a simple u/k probe program that calls a helper and returns the value looks like so:
+```rust 
+fn(regs: &bpf_user_pt_regs_t)
+    a = get_current_uid_gid()
+    map_push_elem(queue, &a, 0)
+    return a
+```
+
+This crate is made to work together with the following crates but they are not required:
+- `btf` A BTF parsing library.
+- `bpf-script-derive` Allows you to seamlessly share types between Rust and this compiler.
+- `bpf-api` Creating programs, probes, maps, etc.
 
 ## Usage
 
