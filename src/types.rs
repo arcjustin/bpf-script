@@ -371,6 +371,36 @@ impl TypeDatabase {
     }
 
     /// Convenience function for adding a struct to the database using
+    /// a slice of (field_name, type_id). Types are added in order, and
+    /// packed together contiguously.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the type.
+    /// * `fields` - The fields to add (by id).
+    pub fn add_struct_by_ids(
+        &mut self,
+        name: Option<&str>,
+        fields: &[(&str, usize)],
+    ) -> Result<usize> {
+        let mut new_fields = Vec::with_capacity(fields.len());
+        let mut offset = 0;
+        for (field_name, type_id) in fields {
+            let field_type = self
+                .get_type_by_id(*type_id)
+                .ok_or(Error::InvalidTypeName)?;
+            let field = Field {
+                offset,
+                type_id: *type_id,
+            };
+            offset += field_type.get_size() * 8;
+            new_fields.push((*field_name, field));
+        }
+        let new_struct = Struct::create(self, new_fields.as_slice())?;
+        self.add_type(name, &BaseType::Struct(new_struct).into())
+    }
+
+    /// Convenience function for adding a struct to the database using
     /// a slice of (field_name, type_name). Types are added in order, and
     /// packed together contiguously.
     ///
