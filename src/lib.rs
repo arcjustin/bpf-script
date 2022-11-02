@@ -1,19 +1,49 @@
 mod compiler;
+mod error;
+mod formats;
 mod helpers;
 mod optimizer;
+mod types;
 
 pub use compiler::Compiler;
+pub use error::{Error, Result};
 pub use helpers::Helpers;
+pub use types::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Compiler, Helpers};
+    use crate::{Compiler, Field, Helpers, TypeDatabase};
     use bpf_ins::{Instruction, Register};
-    use btf::BtfTypes;
 
     fn compile_and_compare(prog: &str, expected: &[Instruction]) {
-        let btf = BtfTypes::from_file("/sys/kernel/btf/vmlinux").unwrap();
-        let mut compiler = Compiler::create(&btf);
+        let mut database = TypeDatabase::default();
+
+        database
+            .add_integer(Some("int"), 4, true)
+            .expect("Failed to add type.");
+
+        let u64id = database
+            .add_integer(Some("__u64"), 8, false)
+            .expect("Failed to add type.");
+
+        let iov_base = Field {
+            offset: 0,
+            type_id: u64id,
+        };
+
+        let iov_len = Field {
+            offset: 64,
+            type_id: u64id,
+        };
+
+        database
+            .add_struct(
+                Some("iovec"),
+                &[("iov_base", iov_base), ("iov_len", iov_len)],
+            )
+            .expect("Failed to add type.");
+
+        let mut compiler = Compiler::create(&database);
         compiler.compile(prog).unwrap();
 
         let instructions = compiler.get_instructions();

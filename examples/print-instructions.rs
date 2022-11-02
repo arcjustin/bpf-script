@@ -1,5 +1,4 @@
-use bpf_script::Compiler;
-use btf::BtfTypes;
+use bpf_script::{Compiler, Field, TypeDatabase};
 
 fn main() {
     let prog = r#"
@@ -10,9 +9,29 @@ fn main() {
               return 50
         "#;
 
-    let btf =
-        BtfTypes::from_file("/sys/kernel/btf/vmlinux").expect("Failed to parse sysfs BTF file.");
-    let mut compiler = Compiler::create(&btf);
+    let mut database = TypeDatabase::default();
+
+    let u64id = database
+        .add_integer(Some("__u64"), 8, false)
+        .expect("Failed to add type.");
+
+    let iov_base = Field {
+        offset: 0,
+        type_id: u64id,
+    };
+
+    let iov_len = Field {
+        offset: 64,
+        type_id: u64id,
+    };
+
+    database
+        .add_struct(
+            Some("iovec"),
+            &[("iov_base", iov_base), ("iov_len", iov_len)],
+        )
+        .expect("Failed to add type.");
+    let mut compiler = Compiler::create(&database);
     compiler.compile(prog).unwrap();
 
     for ins in compiler.get_instructions() {
