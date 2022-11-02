@@ -1,5 +1,6 @@
 use bpf_ins::MemoryOpLoadType;
 
+/// Enum for BPF helper function IDs.
 pub enum Helpers {
     MapLookupElem = 1,
     MapUpdateElem = 2,
@@ -183,7 +184,7 @@ impl Helpers {
     ///
     /// # Examples
     /// ```
-    /// use bpf_script::Helpers;
+    /// use bpf_script::helpers::Helpers;
     ///
     /// matches!(Helpers::from_string("map_update_elem"), Some(Helpers::MapUpdateElem));
     /// ```

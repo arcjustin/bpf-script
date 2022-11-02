@@ -81,8 +81,8 @@ enum VariableLocation {
 
 #[derive(Clone, Debug)]
 struct VariableInfo {
-    pub var_type: Type,
-    pub location: VariableLocation,
+    var_type: Type,
+    location: VariableLocation,
 }
 
 pub struct Compiler<'a> {
@@ -104,7 +104,8 @@ impl<'a> Compiler<'a> {
     ///
     /// # Example
     /// ```
-    /// use bpf_script::{Compiler, TypeDatabase};
+    /// use bpf_script::compiler::Compiler;
+    /// use bpf_script::types::TypeDatabase;
     ///
     /// let mut database = TypeDatabase::default();
     /// let mut compiler = Compiler::create(&database);
@@ -133,7 +134,8 @@ impl<'a> Compiler<'a> {
     ///
     /// # Example
     /// ```
-    /// use bpf_script::{Compiler, TypeDatabase};
+    /// use bpf_script::compiler::Compiler;
+    /// use bpf_script::types::TypeDatabase;
     ///
     /// let mut database = TypeDatabase::default();
     /// let mut compiler = Compiler::create(&database);
@@ -1022,7 +1024,8 @@ impl<'a> Compiler<'a> {
     ///
     /// # Example
     /// ```
-    /// use bpf_script::{Compiler, TypeDatabase};
+    /// use bpf_script::compiler::Compiler;
+    /// use bpf_script::types::TypeDatabase;
     ///
     /// let mut database = TypeDatabase::default();
     /// database.add_integer(Some("u32"), 4, false);
@@ -1046,7 +1049,8 @@ impl<'a> Compiler<'a> {
     ///
     /// # Example
     /// ```
-    /// use bpf_script::{Compiler, TypeDatabase};
+    /// use bpf_script::compiler::Compiler;
+    /// use bpf_script::types::TypeDatabase;
     ///
     /// let mut database = TypeDatabase::default();
     /// database.add_integer(Some("u32"), 4, false);
@@ -1069,7 +1073,8 @@ impl<'a> Compiler<'a> {
     ///
     /// # Example
     /// ```
-    /// use bpf_script::{Compiler, TypeDatabase};
+    /// use bpf_script::compiler::Compiler;
+    /// use bpf_script::types::TypeDatabase;
     ///
     /// let mut database = TypeDatabase::default();
     /// database.add_integer(Some("u32"), 4, false);

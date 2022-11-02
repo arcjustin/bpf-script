@@ -1,4 +1,5 @@
-use bpf_script::{Compiler, Field, TypeDatabase};
+use bpf_script::compiler::Compiler;
+use bpf_script::types::{Field, TypeDatabase};
 
 fn main() {
     let prog = r#"

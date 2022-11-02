@@ -1,18 +1,16 @@
-mod compiler;
-mod error;
 mod formats;
-mod helpers;
 mod optimizer;
-mod types;
 
-pub use compiler::Compiler;
-pub use error::{Error, Result};
-pub use helpers::Helpers;
-pub use types::*;
+pub mod compiler;
+pub mod error;
+pub mod helpers;
+pub mod types;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Compiler, Field, Helpers, TypeDatabase};
+    use crate::compiler::Compiler;
+    use crate::helpers::Helpers;
+    use crate::types::{Field, TypeDatabase};
     use bpf_ins::{Instruction, Register};
 
     fn compile_and_compare(prog: &str, expected: &[Instruction]) {

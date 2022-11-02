@@ -1,4 +1,5 @@
-use crate::{Array, BaseType, Error, Field, Float, Integer, Result, Struct, Type, TypeDatabase};
+use crate::error::{Error, Result};
+use crate::types::{Array, BaseType, Field, Float, Integer, Struct, Type, TypeDatabase};
 
 use btf::{
     Array as BtfArray, Btf, Float as BtfFloat, Integer as BtfInteger, Struct as BtfStruct,
@@ -161,7 +162,7 @@ impl TypeDatabase {
     ///
     /// # Example
     /// ```
-    /// use bpf_script::TypeDatabase;
+    /// use bpf_script::types::TypeDatabase;
     /// use btf::Btf;
     ///
     /// let btf = Btf::from_file("/sys/kernel/btf/vmlinux").expect("Failed to parse vmlinux btf");
