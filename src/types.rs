@@ -263,12 +263,20 @@ impl TypeDatabase {
     /// * `name` - The name of the type.
     /// * `ty` - The type to add.
     pub fn add_type(&mut self, name: Option<&str>, ty: &Type) -> Result<usize> {
-        let index = self.types.len();
-        self.types.push(ty.clone());
         if let Some(name) = name {
-            self.name_map.insert(name.to_string(), index);
+            if let Some(index) = self.name_map.get(name) {
+                self.types[*index] = ty.clone();
+                Ok(*index)
+            } else {
+                let index = self.types.len();
+                self.types.push(ty.clone());
+                self.name_map.insert(name.to_string(), index);
+                Ok(index)
+            }
+        } else {
+            self.types.push(ty.clone());
+            Ok(self.types.len() - 1)
         }
-        Ok(index)
     }
 
     /// Finds a type in the database by name.
