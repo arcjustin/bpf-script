@@ -1,5 +1,5 @@
+use crate::compiler::Helpers;
 use crate::error::{Error, Result as InternalResult, SemanticsErrorContext};
-use crate::helpers::Helpers;
 use crate::optimizer::optimize;
 use crate::types::*;
 

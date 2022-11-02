@@ -3,13 +3,11 @@ mod optimizer;
 
 pub mod compiler;
 pub mod error;
-pub mod helpers;
 pub mod types;
 
 #[cfg(test)]
 mod tests {
     use crate::compiler::Compiler;
-    use crate::helpers::Helpers;
     use crate::types::{Field, TypeDatabase};
     use bpf_ins::{Instruction, Register};
 
@@ -136,14 +134,14 @@ mod tests {
             Instruction::add64(Register::R1, -24),                  // r1 -= 24
             Instruction::mov64(Register::R2, 8),                    // r2 = 8
             Instruction::movx64(Register::R3, Register::R6),        // r3 = r6
-            Instruction::call(Helpers::ProbeRead as u32),           // call #3
+            Instruction::call(4),                                   // call #4 (probe_read)
             Instruction::loadx64(Register::R6, Register::R10, -8),  // r6 = *(r10 - 8)
             Instruction::add64(Register::R6, 8),                    // r6 += 8
             Instruction::movx64(Register::R1, Register::R10),       // r3 = r6
             Instruction::add64(Register::R1, -16),                  // r1 -= 16
             Instruction::mov64(Register::R2, 8),                    // r2 = 8
             Instruction::movx64(Register::R3, Register::R6),        // r3 = r6
-            Instruction::call(Helpers::ProbeRead as u32),           // call #3
+            Instruction::call(4),                                   // call #4 (probe_read)
             Instruction::mov64(Register::R0, 50),                   // r0 = 50
             Instruction::exit(),                                    // exit
         ];
@@ -159,10 +157,10 @@ mod tests {
         "#;
 
         let expected = [
-            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
+            Instruction::call(15), // call #15 (get_current_uid_gid)
             Instruction::storex64(Register::R10, -8, Register::R0), // *(r10 - 8) = r0
-            Instruction::mov64(Register::R0, 0),                 // r0 = 0
-            Instruction::exit(),                                 // exit
+            Instruction::mov64(Register::R0, 0), // r0 = 0
+            Instruction::exit(),   // exit
         ];
 
         compile_and_compare(prog, &expected);
@@ -178,7 +176,7 @@ mod tests {
 
         let expected = [
             Instruction::store64(Register::R10, -8, 100), // *(r10 - 8) = 100
-            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
+            Instruction::call(15),                        // call #15 (get_current_uid_gid)
             Instruction::exit(),                          // exit
         ];
 
@@ -193,10 +191,10 @@ mod tests {
         "#;
 
         let expected = [
-            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
-            Instruction::movx64(Register::R1, Register::R0),     // r1 = r0
-            Instruction::call(Helpers::GetCurrentUidGid as u32), // call #15
-            Instruction::exit(),                                 // exit
+            Instruction::call(15), // call #15 (get_current_uid_gid)
+            Instruction::movx64(Register::R1, Register::R0), // r1 = r0
+            Instruction::call(15), // call #15 (get_current_uid_gid)
+            Instruction::exit(),   // exit
         ];
 
         compile_and_compare(prog, &expected);
