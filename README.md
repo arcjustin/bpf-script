@@ -17,9 +17,9 @@ fn(regs: &bpf_user_pt_regs_t)
 ```
 
 This crate is made to work together with the following crates but they are not required:
-- `btf` A BTF parsing library.
-- `bpf-script-derive` Allows you to seamlessly share types between Rust and this compiler.
-- `bpf-api` Creating programs, probes, maps, etc.
+* `btf` A BTF parsing library.
+* `bpf-script-derive` Allows you to seamlessly share types between Rust and this compiler.
+* `bpf-api` Creating programs, probes, maps, etc.
 
 ## Usage
 
@@ -30,5 +30,10 @@ For usage examples, see code located in [examples/](examples/) :
   |[print-instructions](examples/print-instructions.rs)| Compiles a short program and prints the generated instructions|
 
 ## TODO
-- Add control flow.
-- Remove anyhow / add proper errors.
+
+* Add control flow.
+* Write more thorough tests.
+
+## License
+
+* [MIT license](http://opensource.org/licenses/MIT)
