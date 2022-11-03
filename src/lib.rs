@@ -22,11 +22,23 @@
 //!
 //! ## Usage
 //!
-//! For usage examples, see code located in [examples/](examples/) :
+//! ```rust
+//! use bpf_script::compiler::Compiler;
+//! use bpf_script::types::{AddToTypeDatabase, TypeDatabase};
 //!
-//!   | Examples | Description |
-//!   |----------|-------------|
-//!   |[print-instructions](examples/print-instructions.rs)| Compiles a short program and prints the generated instructions|
+//! let mut types = TypeDatabase::default();
+//! u32::add_to_database(&mut types).expect("Failed to add type");
+//!
+//! let mut compiler = Compiler::create(&types);
+//! compiler.compile(r#"
+//!     fn(a: u32)
+//!         return a
+//! "#).expect("Compilation failed");
+//!
+//! for ins in compiler.get_instructions() {
+//!     println!("{}", ins);
+//! }
+//! ```
 //!
 //! ## TODO
 //!
