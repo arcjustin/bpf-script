@@ -6,6 +6,8 @@ use btf::{
     Type as BtfType,
 };
 
+use std::collections::HashMap;
+
 impl TypeDatabase {
     /// Adds a void type.
     ///
@@ -110,8 +112,9 @@ impl TypeDatabase {
         structure: &BtfStruct,
         num_refs: u32,
     ) -> Result<usize> {
-        let mut fields = Vec::with_capacity(structure.members.len());
-        for member in &structure.members {
+        let mut size = 0;
+        let mut fields = HashMap::with_capacity(structure.members.len());
+        for (i, member) in structure.members.iter().enumerate() {
             let btf_id_name = format!(".btf.{}", member.type_id);
             let type_id = self
                 .get_type_id_by_name(&btf_id_name)
@@ -120,10 +123,24 @@ impl TypeDatabase {
                 offset: member.offset,
                 type_id,
             };
-            fields.push((member.name.as_str(), field));
+
+            let field_type = self
+                .get_type_by_name(&btf_id_name)
+                .ok_or(Error::NoConversion)?;
+            let field_size = (member.offset + field_type.get_size() * 8) / 8;
+            if field_size > size {
+                size = field_size;
+            }
+
+            if let Some(member_name) = &member.name {
+                fields.insert(member_name.to_string(), field);
+            } else {
+                let member_name = format!("{}", i);
+                fields.insert(member_name, field);
+            }
         }
 
-        let base_type = BaseType::Struct(Struct::create(self, fields.as_slice())?);
+        let base_type = BaseType::Struct(Struct { size, fields });
         let new_type = Type {
             base_type,
             num_refs,

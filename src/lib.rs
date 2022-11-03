@@ -46,11 +46,35 @@ pub mod types;
 #[cfg(test)]
 mod tests {
     use crate::compiler::Compiler;
-    use crate::types::{Field, TypeDatabase};
+    use crate::error::Result;
+    use crate::types::{AddToTypeDatabase, Field, TypeDatabase};
     use bpf_ins::{Instruction, Register};
+
+    #[repr(C, align(1))]
+    struct LargeType {
+        pub a: u64,
+        pub b: u32,
+        pub c: u16,
+        pub d: u8,
+    }
+
+    impl AddToTypeDatabase for LargeType {
+        fn add_to_database(database: &mut TypeDatabase) -> Result<usize> {
+            let a_id = u64::add_to_database(database)?;
+            let b_id = u32::add_to_database(database)?;
+            let c_id = u16::add_to_database(database)?;
+            let d_id = u8::add_to_database(database)?;
+            database.add_struct_by_ids(
+                Some("LargeType"),
+                &[("a", a_id), ("b", b_id), ("c", c_id), ("d", d_id)],
+            )
+        }
+    }
 
     fn compile_and_compare(prog: &str, expected: &[Instruction]) {
         let mut database = TypeDatabase::default();
+
+        LargeType::add_to_database(&mut database).expect("Failed to add type.");
 
         database
             .add_integer(Some("int"), 4, true)
@@ -233,6 +257,25 @@ mod tests {
             Instruction::movx64(Register::R1, Register::R0), // r1 = r0
             Instruction::call(15), // call #15 (get_current_uid_gid)
             Instruction::exit(),   // exit
+        ];
+
+        compile_and_compare(prog, &expected);
+    }
+
+    #[test]
+    fn test_zero_init() {
+        let prog = r#"
+            fn()
+                type: LargeType = 0
+        "#;
+
+        let expected = [
+            Instruction::store64(Register::R10, -15, 0), // *(r10 - 15) = 0
+            Instruction::store32(Register::R10, -7, 0),  // *(w10 - 15) = 0
+            Instruction::store16(Register::R10, -3, 0),  // *(h10 - 15) = 0
+            Instruction::store8(Register::R10, -1, 0),   // *(b10 - 15) = 0
+            Instruction::mov64(Register::R0, 0),         // r0 = 0
+            Instruction::exit(),                         // exit
         ];
 
         compile_and_compare(prog, &expected);

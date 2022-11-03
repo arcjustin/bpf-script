@@ -11,7 +11,7 @@ repository = "https://github.com/arcjustin/bpf-script"
 description = "A small scripting language and compiler for creating eBPF programs at runtime."
 
 [dependencies]
-btf = "0.4"
+btf = "0.5"
 bpf-ins = "0.7"
 peginator = "0.3.0"
 peginator_macro = "0.3.0"
