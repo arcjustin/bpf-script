@@ -8,7 +8,7 @@
 //! The intent behind building this crate was to primarily learn more about BPF internals and, secondly, to provide a dependency-free way of writing BPF programs, using a higher-level language, that could be compiled at run-time without the need to shell out to a compiler and load/patch BPF from an ELF file.
 //!
 //! The syntax for the language resembles Rust with a lot of features stripped out. For example, a simple u/k probe program that calls a helper and returns the value looks like so:
-//! ```rust
+//! ```ignore
 //! fn(regs: &bpf_user_pt_regs_t)
 //!     a = get_current_uid_gid()
 //!     map_push_elem(queue, &a, 0)
