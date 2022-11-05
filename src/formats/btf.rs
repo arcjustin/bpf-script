@@ -202,10 +202,11 @@ impl TypeDatabase {
         for (i, btf_type) in btf.get_types().iter().enumerate() {
             let btf_id_name = format!(".btf.{}", i);
             self.add_btf_type(Some(&btf_id_name), &btf_type.base_type, btf_type.num_refs)?;
-
-            for name in &btf_type.names {
-                self.add_btf_type(Some(name), &btf_type.base_type, btf_type.num_refs)?;
-            }
+            self.add_btf_type(
+                btf_type.name.as_deref(),
+                &btf_type.base_type,
+                btf_type.num_refs,
+            )?;
         }
 
         Ok(())

@@ -167,6 +167,13 @@ impl Helpers {
                 MemoryOpLoadType::Void,
                 MemoryOpLoadType::Void,
             ],
+            Helpers::RingbufOutput => &[
+                MemoryOpLoadType::Map,
+                MemoryOpLoadType::MapValue,
+                MemoryOpLoadType::Void,
+                MemoryOpLoadType::Void,
+                MemoryOpLoadType::Void,
+            ],
             _ => &[
                 MemoryOpLoadType::Void,
                 MemoryOpLoadType::Void,
