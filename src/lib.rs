@@ -60,7 +60,7 @@ mod tests {
     use crate::compiler::Compiler;
     use crate::error::Result;
     use crate::types::{AddToTypeDatabase, Field, TypeDatabase};
-    use bpf_ins::{Instruction, Register};
+    use bpf_ins::{Instruction, JumpOperation, Register};
 
     #[repr(C, align(1))]
     struct LargeType {
@@ -288,6 +288,37 @@ mod tests {
             Instruction::store8(Register::R10, -1, 0),   // *(b10 - 15) = 0
             Instruction::mov64(Register::R0, 0),         // r0 = 0
             Instruction::exit(),                         // exit
+        ];
+
+        compile_and_compare(prog, &expected);
+    }
+
+    #[test]
+    fn test_condition() {
+        let prog = r#"
+            fn(a: u64, b: u64)
+                if a > b {
+                    return a
+                } else {
+                    return b
+                }
+        "#;
+
+        let expected = [
+            Instruction::storex64(Register::R10, -8, Register::R1), // *(r10 - 8) = r1
+            Instruction::storex64(Register::R10, -16, Register::R2), // *(r10 - 16) = r2
+            Instruction::loadx64(Register::R8, Register::R10, -8),  // r8 = *(r10 - 8)
+            Instruction::movx64(Register::R9, Register::R10),       // r9 = r10
+            Instruction::loadx64(Register::R9, Register::R9, -16),  // r9 = *(r9 -16)
+            Instruction::jmp_ifx(Register::R8, JumpOperation::IfGreater, Register::R9, 1), // if r8 > r9; PC += 1
+            Instruction::jmp_abs(3),                                // PC += 3
+            Instruction::loadx64(Register::R0, Register::R10, -8),  // r0 = *(r10 - 8),
+            Instruction::exit(),                                    // exit
+            Instruction::jmp_abs(2),                                // PC += 2
+            Instruction::loadx64(Register::R0, Register::R10, -16), // r0 = *(r10 - 16),
+            Instruction::exit(),                                    // exit
+            Instruction::mov64(Register::R0, 0),                    // r0 = 0
+            Instruction::exit(),                                    // exit
         ];
 
         compile_and_compare(prog, &expected);

@@ -3,7 +3,7 @@ use crate::error::{Error, Result as InternalResult, SemanticsErrorContext};
 use crate::optimizer::optimize;
 use crate::types::*;
 
-use bpf_ins::{Instruction, MemoryOpLoadType, Register};
+use bpf_ins::{Instruction, JumpOperation, MemoryOpLoadType, Register};
 use peginator::PegParser;
 use peginator_macro::peginate;
 
@@ -19,13 +19,14 @@ InputLine = 'fn' '(' [args:TypedArgument {',' args:TypedArgument}] ')';
 TypedArgument = name:Ident ':' type_name:TypeDecl;
 TypeDecl = [is_ref:ReferencePrefix] name:Ident;
 
-Expression = @:Assignment | @:FunctionCall | @:Return;
+Expression = @:Assignment | @:FunctionCall | @:Return | @:IfStatement;
 
 Assignment = left:LValue [':' type_name:TypeDecl] '=' right:RValue;
 FunctionCall = name:Ident '(' [args:RValue {',' args:RValue}] ')';
 Return = 'return' [value:RValue];
 
-Condition = left:LValue WhiteSpace op:Comparator WhiteSpace right:RValue;
+Condition = left:RValue WhiteSpace op:Comparator WhiteSpace right:RValue;
+IfStatement = 'if' cond:Condition '{' {exprs:Expression} '}' ['else' '{' {else_exprs:Expression} '}'];
 
 RValue = @:FunctionCall | @:Immediate | @:LValue;
 LValue = [prefix:Prefix] name:Ident {derefs:DeReference};
@@ -930,6 +931,56 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    /// Emits instructions that perform an if statement.
+    ///
+    /// # Arguments
+    ///
+    /// * `if_statement` - The if statement information.
+    fn emit_if_statement(&mut self, if_statement: &IfStatement) -> InternalResult<()> {
+        self.emit_set_register_from_rvalue(Register::R8, &if_statement.cond.left, None)?;
+        self.emit_set_register_from_rvalue(Register::R9, &if_statement.cond.right, None)?;
+
+        self.instructions = optimize(&self.instructions);
+
+        let operation = match if_statement.cond.op {
+            Comparator::Equals(_) => JumpOperation::IfEqual,
+            Comparator::NotEquals(_) => JumpOperation::IfNotEqual,
+            Comparator::GreaterThan(_) => JumpOperation::IfGreater,
+            Comparator::GreaterOrEqual(_) => JumpOperation::IfGreaterOrEqual,
+            Comparator::LessThan(_) => JumpOperation::IfLessThan,
+            Comparator::LessOrEqual(_) => JumpOperation::IfLessThanOrEqual,
+        };
+
+        self.instructions.push(Instruction::jmp_ifx(
+            Register::R8,
+            operation,
+            Register::R9,
+            1,
+        ));
+
+        let else_index = self.instructions.len();
+        self.instructions.push(Instruction::jmp_abs(0));
+
+        self.emit_body(&if_statement.exprs)?;
+
+        let end_index = self.instructions.len();
+        if !if_statement.else_exprs.is_empty() {
+            self.instructions.push(Instruction::jmp_abs(0));
+        }
+
+        let offset: i16 = (self.instructions.len() - else_index - 1).try_into()?;
+        self.instructions[else_index] = Instruction::jmp_abs(offset);
+
+        if !if_statement.else_exprs.is_empty() {
+            self.emit_body(&if_statement.else_exprs)?;
+
+            let offset: i16 = (self.instructions.len() - end_index - 1).try_into()?;
+            self.instructions[end_index] = Instruction::jmp_abs(offset);
+        }
+
+        Ok(())
+    }
+
     /// Emits instructions that perform a return.
     ///
     /// # Arguments
@@ -999,19 +1050,16 @@ impl<'a> Compiler<'a> {
                 Expression::FunctionCall(call) => {
                     self.emit_call(call)?;
                 }
+                Expression::IfStatement(if_statement) => {
+                    self.emit_if_statement(if_statement)?;
+                }
                 Expression::Return(ret) => {
                     self.emit_return(ret)?;
                 }
             }
         }
 
-        /*
-         * Programs implicitly return 0 when no return statement is specified.
-         */
-        let last = exprs.last();
-        if matches!(last, None) || !matches!(last, Some(Expression::Return(_))) {
-            self.emit_return(&Return { value: None })?;
-        }
+        self.instructions = optimize(&self.instructions);
 
         Ok(())
     }
@@ -1040,7 +1088,13 @@ impl<'a> Compiler<'a> {
         self.emit_prologue(&ast.input)?;
         self.emit_body(&ast.exprs)?;
 
-        self.instructions = optimize(&self.instructions);
+        /*
+         * Programs implicitly return 0 when no return statement is specified.
+         */
+        let last = ast.exprs.last();
+        if matches!(last, None) || !matches!(last, Some(Expression::Return(_))) {
+            self.emit_return(&Return { value: None })?;
+        }
 
         Ok(())
     }
