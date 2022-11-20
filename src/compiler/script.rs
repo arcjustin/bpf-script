@@ -3,7 +3,7 @@ use crate::error::{Error, Result as InternalResult, SemanticsErrorContext};
 use crate::optimizer::optimize;
 use crate::types::*;
 
-use bpf_ins::{Instruction, JumpOperation, MemoryOpLoadType, Register};
+use bpf_ins::{ArithmeticOperation, Instruction, JumpOperation, MemoryOpLoadType, Register};
 use peginator::PegParser;
 use peginator_macro::peginate;
 
@@ -28,7 +28,8 @@ Return = 'return' [value:RValue];
 Condition = left:RValue WhiteSpace op:Comparator WhiteSpace right:RValue;
 IfStatement = 'if' cond:Condition '{' {exprs:Expression} '}' ['else' '{' {else_exprs:Expression} '}'];
 
-RValue = @:FunctionCall | @:Immediate | @:LValue;
+RValue = left:RValueInner [op:Operation right:RValueInner];
+RValueInner = @:FunctionCall | @:Immediate | @:LValue;
 LValue = [prefix:Prefix] name:Ident {derefs:DeReference};
 
 DeReference = @:FieldAccess | @:ArrayIndex;
@@ -37,7 +38,7 @@ FieldAccess = '.' name:Ident;
 ArrayIndex = '[' element:Immediate ']';
 
 @string
-Immediate = {'0'..'9'}+;
+Immediate = ['-'] {'0'..'9'}+;
 
 Comparator = @:Equals | @:NotEquals | @:LessThan | @:GreaterThan | @:LessOrEqual | @:GreaterOrEqual;
 Equals = '==';
@@ -48,6 +49,15 @@ LessOrEqual = '<=';
 GreaterOrEqual = '>=';
 ReferencePrefix = '&';
 DeReferencePrefix = '*';
+
+Operation = @:Plus | @:Minus | @:Times | @:LeftShift | @:RightShift | @:And | @:Or;
+Plus = '+';
+Minus = '-';
+Times = '*';
+LeftShift = '<<';
+RightShift = '>>';
+And = '&';
+Or = '|';
 
 Prefix = @:ReferencePrefix | @:DeReferencePrefix;
 
@@ -479,6 +489,56 @@ impl<'a> Compiler<'a> {
         Ok((offset, real_type.clone()))
     }
 
+    /// Emits instructions that perform the arithmetic for the given rvalue. Registers
+    /// 6 and 7 are used to perform the operation, result is stored in R6.
+    ///
+    /// # Arguments
+    ///
+    /// * `left` - The RValue on the left of the operation.
+    /// * `operation` - The arithmetic operation.
+    /// * `right` - The RValue on the right of the operation.
+    fn emit_rvalue_arithmetic(
+        &mut self,
+        left: &RValueInner,
+        operation: &Operation,
+        right: &RValueInner,
+    ) -> InternalResult<Type> {
+        let left_as_rval = RValue {
+            left: left.clone(),
+            op: None,
+            right: None,
+        };
+        let right_as_rval = RValue {
+            left: right.clone(),
+            op: None,
+            right: None,
+        };
+
+        let left_type = self.emit_set_register_from_rvalue(Register::R6, &left_as_rval, None)?;
+        let right_type = self.emit_set_register_from_rvalue(Register::R7, &right_as_rval, None)?;
+        if left_type != right_type {
+            semantics_bail!(
+                self.expr_num,
+                "Arithmetic can only be performed on the same types"
+            );
+        }
+
+        let operation = match operation {
+            Operation::Plus(_) => ArithmeticOperation::Add,
+            Operation::Minus(_) => ArithmeticOperation::Sub,
+            Operation::Times(_) => ArithmeticOperation::Mul,
+            Operation::LeftShift(_) => ArithmeticOperation::Lhs,
+            Operation::RightShift(_) => ArithmeticOperation::Rhs,
+            Operation::And(_) => ArithmeticOperation::And,
+            Operation::Or(_) => ArithmeticOperation::Or,
+        };
+
+        self.instructions
+            .push(Instruction::alux64(Register::R6, Register::R7, operation));
+
+        Ok(right_type)
+    }
+
     /// Emits instructions that push an rvalue to the stack. RValues in this language
     /// are anything that occur on the right hand side of an assignment: immediates,
     /// lvalues, function calls, etc.
@@ -494,27 +554,45 @@ impl<'a> Compiler<'a> {
         cast_type: &Type,
         use_offset: Option<i16>,
     ) -> InternalResult<(i16, Type)> {
-        match rval {
-            RValue::Immediate(imm_str) => self.emit_push_immediate(imm_str, cast_type, use_offset),
-            RValue::LValue(lval) => self.emit_push_lvalue(lval, cast_type, use_offset),
-            RValue::FunctionCall(call) => {
-                if let BaseType::Integer(integer) = &cast_type.base_type {
-                    if integer.get_size() != 8 {
+        if let (Some(op), Some(right)) = (&rval.op, &rval.right) {
+            let var_type = self.emit_rvalue_arithmetic(&rval.left, op, right)?;
+            if !matches!(cast_type.base_type, BaseType::Void) && var_type != *cast_type {
+                semantics_bail!(
+                    self.expr_num,
+                    "Cannot store result of arithmetic in this type"
+                );
+            }
+            let offset = self.emit_push_register(Register::R6, use_offset)?;
+            return Ok((offset, var_type));
+        }
+
+        match &rval.left {
+            RValueInner::Immediate(imm_str) => {
+                self.emit_push_immediate(imm_str, cast_type, use_offset)
+            }
+            RValueInner::LValue(lval) => self.emit_push_lvalue(lval, cast_type, use_offset),
+            RValueInner::FunctionCall(call) => {
+                let ret_type = self.emit_call(call)?;
+                let var_type = match &cast_type.base_type {
+                    BaseType::Void => &ret_type,
+                    BaseType::Integer(integer) => {
+                        if integer.get_size() != 8 {
+                            semantics_bail!(
+                                self.expr_num,
+                                "Function return values can only be stored in 64-bit types"
+                            );
+                        }
+                        cast_type
+                    }
+                    _ => {
                         semantics_bail!(
                             self.expr_num,
-                            "Function return values can only be stored in 64-bit types"
+                            "Function return values can only be stored in integer types"
                         );
                     }
-
-                    self.emit_call(call)?;
-                    let offset = self.emit_push_register(Register::R0, use_offset)?;
-                    Ok((offset, cast_type.clone()))
-                } else {
-                    semantics_bail!(
-                        self.expr_num,
-                        "Function return values can only be stored in integer types"
-                    );
-                }
+                };
+                let offset = self.emit_push_register(Register::R0, use_offset)?;
+                Ok((offset, var_type.clone()))
             }
         }
     }
@@ -796,7 +874,7 @@ impl<'a> Compiler<'a> {
         reg: Register,
         lval: &LValue,
         load_type: Option<MemoryOpLoadType>,
-    ) -> InternalResult<()> {
+    ) -> InternalResult<Type> {
         let info = self.get_variable_by_name(&lval.name)?;
         if let VariableLocation::SpecialImmediate(v) = info.location {
             if !lval.derefs.is_empty() {
@@ -810,17 +888,18 @@ impl<'a> Compiler<'a> {
             let load_type = load_type.unwrap_or(MemoryOpLoadType::Void);
             self.instructions
                 .push(Instruction::loadtype(reg, v.into(), load_type));
-            return Ok(());
+            return Ok(info.var_type);
         }
 
-        let var_type = self.emit_set_register_to_lvalue_addr(reg, lval)?;
+        let mut var_type = self.emit_set_register_to_lvalue_addr(reg, lval)?;
 
         /*
          * the register is already holding a pointer to the lvalue so, if a reference
          * was specified, nothing else needs to be done.
          */
         if matches!(lval.prefix, Some(Prefix::ReferencePrefix(_))) {
-            return Ok(());
+            var_type.num_refs += 1;
+            return Ok(var_type);
         }
 
         /*
@@ -851,10 +930,11 @@ impl<'a> Compiler<'a> {
                 semantics_bail!(self.expr_num, "Cannot dereference a non-pointer type");
             }
 
+            var_type.num_refs -= 1;
             self.instructions.push(Instruction::loadx64(reg, reg, 0));
         }
 
-        Ok(())
+        Ok(var_type)
     }
 
     /// Given a register and rvalue information, emits instructions that set the
@@ -872,9 +952,16 @@ impl<'a> Compiler<'a> {
         reg: Register,
         rval: &RValue,
         load_type: Option<MemoryOpLoadType>,
-    ) -> InternalResult<()> {
-        match rval {
-            RValue::Immediate(imm_str) => {
+    ) -> InternalResult<Type> {
+        if let (Some(op), Some(right)) = (&rval.op, &rval.right) {
+            let var_type = self.emit_rvalue_arithmetic(&rval.left, op, right)?;
+            self.instructions
+                .push(Instruction::movx64(reg, Register::R6));
+            return Ok(var_type);
+        }
+
+        match &rval.left {
+            RValueInner::Immediate(imm_str) => {
                 if let Some(load_type) = load_type {
                     let imm = self.parse_immediate(imm_str)?;
                     self.instructions
@@ -883,20 +970,26 @@ impl<'a> Compiler<'a> {
                     let imm = self.parse_immediate(imm_str)?;
                     self.instructions.push(Instruction::mov64(reg, imm));
                 }
+
+                let var_type: Type = BaseType::Integer(Integer {
+                    used_bits: 64,
+                    bits: 64,
+                    is_signed: false,
+                })
+                .into();
+
+                Ok(var_type)
             }
-            RValue::LValue(lval) => {
-                self.emit_set_register_from_lvalue(reg, lval, load_type)?;
-            }
-            RValue::FunctionCall(call) => {
-                self.emit_call(call)?;
+            RValueInner::LValue(lval) => self.emit_set_register_from_lvalue(reg, lval, load_type),
+            RValueInner::FunctionCall(call) => {
+                let ret_type = self.emit_call(call)?;
                 if !matches!(reg, Register::R0) {
                     self.instructions
                         .push(Instruction::movx64(reg, Register::R0));
                 }
+                Ok(ret_type)
             }
         }
-
-        Ok(())
     }
 
     /// Emits instructions that perform a call.
@@ -904,7 +997,7 @@ impl<'a> Compiler<'a> {
     /// # Arguments
     ///
     /// * `call` - Information about the call.
-    fn emit_call(&mut self, call: &FunctionCall) -> InternalResult<()> {
+    fn emit_call(&mut self, call: &FunctionCall) -> InternalResult<Type> {
         let helper = match Helpers::from_string(&call.name) {
             Some(helper) => helper,
             None => {
@@ -928,7 +1021,14 @@ impl<'a> Compiler<'a> {
         }
         self.instructions.push(Instruction::call(helper as u32));
 
-        Ok(())
+        let var_type: Type = BaseType::Integer(Integer {
+            used_bits: 64,
+            bits: 64,
+            is_signed: false,
+        })
+        .into();
+
+        Ok(var_type)
     }
 
     /// Emits instructions that perform an if statement.

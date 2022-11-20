@@ -3,7 +3,7 @@ use crate::error::{Error, Result};
 use std::collections::HashMap;
 
 /// Represents the physical properties of an integer.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Integer {
     /// The total number of bits used to store the integer.
     pub used_bits: u32,
@@ -23,7 +23,7 @@ impl Integer {
 }
 
 /// Represents the physical properties of a float.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Float {
     /// The number of bits used to store and perform operations on.
     pub bits: u32,
@@ -37,7 +37,7 @@ impl Float {
 }
 
 /// Represents the physical properties of an array.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Array {
     /// The type of element the array stores.
     pub element_type_id: usize,
@@ -80,7 +80,7 @@ impl Array {
 }
 
 /// Represents the phystical properties of a field in a struct or union.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Field {
     /// The offset, in bits, of the field.
     pub offset: u32,
@@ -101,7 +101,7 @@ impl Field {
 }
 
 /// Represents the physical properties of a structure.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Struct {
     /// A map of field name to field type.
     pub fields: HashMap<String, Field>,
@@ -144,7 +144,7 @@ impl Struct {
 }
 
 /// Represents the physical properties of an enum type.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Enum {
     /// The number of bits representing each value.
     pub bits: u32,
@@ -161,7 +161,7 @@ impl Enum {
 }
 
 /// Represents the physical properties of a function.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Function {
     /// The function parameters as an array of types.
     pub param_type_ids: Vec<usize>,
@@ -181,7 +181,7 @@ impl Function {
 }
 
 /// Variant for holding any kind of type.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum BaseType {
     #[default]
     Void,
@@ -210,7 +210,7 @@ impl BaseType {
 }
 
 /// Represents a fully-qualified type.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Type {
     /// The concrete base type.
     pub base_type: BaseType,

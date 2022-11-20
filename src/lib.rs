@@ -60,7 +60,7 @@ mod tests {
     use crate::compiler::Compiler;
     use crate::error::Result;
     use crate::types::{AddToTypeDatabase, Field, TypeDatabase};
-    use bpf_ins::{Instruction, JumpOperation, Register};
+    use bpf_ins::{ArithmeticOperation, Instruction, JumpOperation, Register};
 
     #[repr(C, align(1))]
     struct LargeType {
@@ -319,6 +319,44 @@ mod tests {
             Instruction::exit(),                                    // exit
             Instruction::mov64(Register::R0, 0),                    // r0 = 0
             Instruction::exit(),                                    // exit
+        ];
+
+        compile_and_compare(prog, &expected);
+    }
+
+    #[test]
+    fn test_arithmetic() {
+        let prog = r#"
+            fn(a: u64, b: u64)
+                c = 100 + 1
+                if a + c > b + 5 {
+                    return 1
+                }
+                return 2
+        "#;
+
+        let expected = [
+            Instruction::storex64(Register::R10, -8, Register::R1),
+            Instruction::storex64(Register::R10, -16, Register::R2),
+            Instruction::mov64(Register::R6, 100),
+            Instruction::mov64(Register::R7, 1),
+            Instruction::alux64(Register::R6, Register::R7, ArithmeticOperation::Add),
+            Instruction::storex64(Register::R10, -24, Register::R6),
+            Instruction::loadx64(Register::R6, Register::R10, -8),
+            Instruction::movx64(Register::R7, Register::R10),
+            Instruction::loadx64(Register::R7, Register::R7, -24),
+            Instruction::alux64(Register::R6, Register::R7, ArithmeticOperation::Add),
+            Instruction::movx64(Register::R8, Register::R6),
+            Instruction::loadx64(Register::R6, Register::R10, -16),
+            Instruction::mov64(Register::R7, 5),
+            Instruction::alux64(Register::R6, Register::R7, ArithmeticOperation::Add),
+            Instruction::movx64(Register::R9, Register::R6),
+            Instruction::jmp_ifx(Register::R8, JumpOperation::IfGreater, Register::R9, 1),
+            Instruction::jmp_abs(2),
+            Instruction::mov64(Register::R0, 1),
+            Instruction::exit(),
+            Instruction::mov64(Register::R0, 2),
+            Instruction::exit(),
         ];
 
         compile_and_compare(prog, &expected);
