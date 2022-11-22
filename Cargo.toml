@@ -14,5 +14,5 @@ description = "A small scripting language and compiler for creating eBPF program
 btf = "0.5"
 bpf-ins = "0.7"
 peginator = "0.3.0"
-peginator_macro = "0.3.0"
+peginator_macro = "0.4.0"
 thiserror = "1.0.37"
